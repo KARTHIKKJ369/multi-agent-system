@@ -1,0 +1,62 @@
+# Core Framework
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# LangGraph & LangChain
+langgraph==0.0.51
+langchain==0.1.20
+langchain-openai==0.1.7
+langchain-anthropic==0.1.11
+langchain-community==0.0.38
+
+# LLM Providers
+openai==1.30.1
+anthropic==0.25.9
+
+# Databases
+asyncpg==0.29.0
+redis==5.0.1
+qdrant-client==1.7.0
+sqlalchemy==2.0.25
+alembic==1.13.1
+
+# Vector embeddings default to the OpenAI provider. Install sentence-transformers
+# separately only when adding a local embedding provider implementation.
+
+# Task Queue
+celery==5.3.6
+kombu==5.3.5
+
+# Monitoring & Observability
+opentelemetry-api==1.22.0
+opentelemetry-sdk==1.22.0
+opentelemetry-instrumentation-fastapi==0.43b0
+opentelemetry-exporter-otlp-proto-grpc==1.22.0
+langsmith==0.1.147
+prometheus-client==0.19.0
+
+# Utilities
+python-dotenv==1.0.0
+httpx==0.26.0
+aiohttp==3.9.1
+python-multipart==0.0.6
+pypdf==4.0.1
+python-docx==1.1.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Testing
+pytest==7.4.4
+pytest-asyncio==0.23.3
+pytest-cov==4.1.0
+
+# Code Quality
+black==24.1.1
+ruff==0.1.15
+mypy==1.8.0
+
+# Documentation
+mkdocs==1.5.3
+mkdocs-material==9.5.9
