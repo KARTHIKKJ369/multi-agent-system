@@ -1,7 +1,10 @@
 import json
+import asyncio
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 import redis.asyncio as redis
+from sqlalchemy import Column, DateTime, MetaData, String, Table, Text, select, update
+from sqlalchemy.ext.asyncio import create_async_engine
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct, Filter, FieldCondition, MatchValue
 
@@ -9,6 +12,7 @@ from .types import MemoryType, MemoryPriority
 from ..configs.settings import settings
 from ..utils.logger import get_logger
 from ..utils.observability import observability
+from ..rag.embeddings import OpenAIEmbeddingProvider
 
 
 class MemoryManager:
@@ -27,37 +31,61 @@ class MemoryManager:
         self.logger = get_logger("memory_manager")
         self.redis_client: Optional[redis.Redis] = None
         self.qdrant_client: Optional[QdrantClient] = None
+        self.engine = None
+        self.embedding_provider = OpenAIEmbeddingProvider(settings.embedding_model, settings.openai_api_key)
         self._initialized = False
+        self._leases = 0
+        self._lifecycle_lock = asyncio.Lock()
+        self._metadata = MetaData()
+        self._long_term_memory = Table(
+            "long_term_memory", self._metadata,
+            Column("key", String(512), primary_key=True),
+            Column("category", String(128), nullable=False),
+            Column("value", Text, nullable=False),
+            Column("updated_at", DateTime, nullable=False),
+        )
+        self._user_preferences = Table(
+            "user_preferences", self._metadata,
+            Column("user_id", String(256), primary_key=True),
+            Column("preference_key", String(256), primary_key=True),
+            Column("value", Text, nullable=False),
+            Column("updated_at", DateTime, nullable=False),
+        )
     
     async def initialize(self) -> None:
         """Initialize all memory backends"""
-        if self._initialized:
-            return
-        
-        # Initialize Redis
-        self.redis_client = redis.from_url(
-            settings.redis_url,
-            encoding="utf-8",
-            decode_responses=True
-        )
-        
-        # Initialize Qdrant
-        self.qdrant_client = QdrantClient(url=settings.qdrant_url)
-        
-        # Create collection if it doesn't exist
-        await self._ensure_qdrant_collection()
-        
-        self._initialized = True
-        self.logger.info("Memory manager initialized")
+        async with self._lifecycle_lock:
+            if self._initialized:
+                self._leases += 1
+                return
+            self.redis_client = redis.from_url(settings.redis_url, encoding="utf-8", decode_responses=True)
+            self.qdrant_client = QdrantClient(url=settings.qdrant_url)
+            self.engine = create_async_engine(settings.postgres_url, echo=settings.debug)
+            async with self.engine.begin() as connection:
+                await connection.run_sync(self._metadata.create_all)
+            await self._ensure_qdrant_collection()
+            self._initialized = True
+            self._leases = 1
+            self.logger.info("Memory manager initialized")
     
     async def close(self) -> None:
         """Close all connections"""
-        if self.redis_client:
-            await self.redis_client.close()
-        if self.qdrant_client:
-            self.qdrant_client.close()
-        self._initialized = False
-        self.logger.info("Memory manager closed")
+        async with self._lifecycle_lock:
+            if not self._initialized:
+                return
+            self._leases -= 1
+            if self._leases > 0:
+                return
+            if self.redis_client:
+                await self.redis_client.close()
+            if self.qdrant_client:
+                self.qdrant_client.close()
+            if self.engine:
+                await self.engine.dispose()
+            self.redis_client = self.qdrant_client = self.engine = None
+            self._initialized = False
+            self._leases = 0
+            self.logger.info("Memory manager closed")
     
     async def _ensure_qdrant_collection(self) -> None:
         """Ensure Qdrant collection exists"""
@@ -206,7 +234,7 @@ class MemoryManager:
         
         self.logger.debug(f"Deleted embedding {point_id}")
     
-    # Long-term Memory (PostgreSQL placeholder)
+    # Long-term Memory (PostgreSQL)
     
     async def store_long_term(
         self,
@@ -214,15 +242,25 @@ class MemoryManager:
         value: Any,
         category: str = "general"
     ) -> None:
-        """Store long-term memory in PostgreSQL"""
-        # TODO: Implement PostgreSQL storage
-        self.logger.debug(f"Would store long-term memory: {key} in category {category}")
+        """Store long-term memory in PostgreSQL."""
+        if not self._initialized:
+            await self.initialize()
+        values = {"key": key, "category": category, "value": json.dumps(value), "updated_at": datetime.utcnow()}
+        async with self.engine.begin() as connection:
+            existing = await connection.execute(select(self._long_term_memory.c.key).where(self._long_term_memory.c.key == key))
+            if existing.scalar_one_or_none() is None:
+                await connection.execute(self._long_term_memory.insert().values(**values))
+            else:
+                await connection.execute(update(self._long_term_memory).where(self._long_term_memory.c.key == key).values(**values))
     
     async def get_long_term(self, key: str) -> Optional[Any]:
-        """Retrieve long-term memory from PostgreSQL"""
-        # TODO: Implement PostgreSQL retrieval
-        self.logger.debug(f"Would retrieve long-term memory: {key}")
-        return None
+        """Retrieve long-term memory from PostgreSQL."""
+        if not self._initialized:
+            await self.initialize()
+        async with self.engine.connect() as connection:
+            result = await connection.execute(select(self._long_term_memory.c.value).where(self._long_term_memory.c.key == key))
+            value = result.scalar_one_or_none()
+        return json.loads(value) if value is not None else None
     
     # User Memory
     
@@ -232,19 +270,42 @@ class MemoryManager:
         preference_key: str,
         preference_value: Any
     ) -> None:
-        """Store user preference"""
-        # TODO: Implement in PostgreSQL
-        self.logger.debug(f"Would store user preference for {user_id}: {preference_key}")
+        """Store a user preference in PostgreSQL."""
+        if not self._initialized:
+            await self.initialize()
+        values = {
+            "user_id": user_id, "preference_key": preference_key,
+            "value": json.dumps(preference_value), "updated_at": datetime.utcnow(),
+        }
+        async with self.engine.begin() as connection:
+            statement = select(self._user_preferences.c.user_id).where(
+                self._user_preferences.c.user_id == user_id,
+                self._user_preferences.c.preference_key == preference_key,
+            )
+            existing = await connection.execute(statement)
+            if existing.scalar_one_or_none() is None:
+                await connection.execute(self._user_preferences.insert().values(**values))
+            else:
+                await connection.execute(update(self._user_preferences).where(
+                    self._user_preferences.c.user_id == user_id,
+                    self._user_preferences.c.preference_key == preference_key,
+                ).values(**values))
     
     async def get_user_preference(
         self,
         user_id: str,
         preference_key: str
     ) -> Optional[Any]:
-        """Get user preference"""
-        # TODO: Implement in PostgreSQL
-        self.logger.debug(f"Would get user preference for {user_id}: {preference_key}")
-        return None
+        """Get a user preference from PostgreSQL."""
+        if not self._initialized:
+            await self.initialize()
+        async with self.engine.connect() as connection:
+            result = await connection.execute(select(self._user_preferences.c.value).where(
+                self._user_preferences.c.user_id == user_id,
+                self._user_preferences.c.preference_key == preference_key,
+            ))
+            value = result.scalar_one_or_none()
+        return json.loads(value) if value is not None else None
     
     # Knowledge Base
     
@@ -259,8 +320,7 @@ class MemoryManager:
             await self.initialize()
         
         if embedding is None:
-            # TODO: Generate embedding
-            embedding = [0.0] * settings.embedding_dimension
+            embedding = await self.embedding_provider.embed_query(text)
         
         payload = {
             "text": text,

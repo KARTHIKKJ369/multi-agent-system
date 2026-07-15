@@ -60,7 +60,9 @@ async def execute_request(request: RequestModel) -> ResponseModel:
         supervisor = Supervisor()
         result = await supervisor.process_request(
             user_request=request.message,
-            conversation_id=request.conversation_id
+            conversation_id=request.conversation_id,
+            enable_reflection=request.enable_reflection,
+            enable_qa=request.enable_qa,
         )
         
         return ResponseModel(**result)

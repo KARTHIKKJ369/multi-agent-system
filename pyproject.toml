@@ -18,8 +18,8 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 
-[tool.setuptools]
-packages = ["multi_agent_system"]
+[tool.setuptools.packages.find]
+include = ["multi_agent_system*", "agents*", "api*", "configs*", "graph*", "memory*", "rag*", "routing*", "state*", "supervisor*", "tools*", "utils*"]
 
 [tool.black]
 line-length = 100

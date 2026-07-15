@@ -72,7 +72,9 @@ class Supervisor:
     async def process_request(
         self,
         user_request: str,
-        conversation_id: Optional[str] = None
+        conversation_id: Optional[str] = None,
+        enable_reflection: bool = True,
+        enable_qa: bool = True,
     ) -> Dict[str, Any]:
         """
         Process a user request through the multi-agent system.
@@ -116,13 +118,18 @@ class Supervisor:
                 aggregated = await self._aggregate_results(results)
             
             # Step 5: Reflection and QA
-                validated = await self._reflect_and_validate(user_request, aggregated)
+                validated = await self._reflect_and_validate(
+                    user_request, aggregated, enable_reflection=enable_reflection, enable_qa=enable_qa
+                )
             
             # Step 6: Generate final response
                 final_response = await self._generate_final_response(user_request, validated)
             
             # Store final response
-                await state_manager.set_final_response(execution_id, final_response)
+                await state_manager.set_final_response(
+                    execution_id, final_response, confidence=validated["confidence"]
+                )
+                execution = await state_manager.get_execution(execution_id) or execution
             
                 execution_time = (datetime.utcnow() - start_time).total_seconds()
             
@@ -181,6 +188,10 @@ Respond with only the task type."""
         Handles parallel execution when dependencies allow.
         """
         results = {}
+        # The state store is the source for the API.  Register the complete graph
+        # before tasks run so status and metric updates cannot silently be dropped.
+        for task in task_graph.tasks.values():
+            await state_manager.add_task(execution_id, task)
         with observability.span("graph.execution", execution_id=execution_id):
             while not task_graph.is_complete():
                 # Get ready tasks (dependencies satisfied)
@@ -230,6 +241,7 @@ Respond with only the task type."""
         )
         
         self.agent_logger.log_task_start(task.task_id, task.description)
+        started_at = datetime.utcnow()
         
         try:
             # Get the appropriate agent
@@ -238,6 +250,15 @@ Respond with only the task type."""
             # Execute the task
             with observability.span("agent.execution", execution_id=execution_id, agent_id=task.agent_id, task_id=task.task_id):
                 result = await agent.execute(task)
+
+            usage = getattr(agent, "last_call_metrics", {})
+            await state_manager.record_task_metrics(
+                execution_id,
+                task.task_id,
+                int(usage.get("tokens", 0)),
+                float(usage.get("cost", 0.0)),
+                (datetime.utcnow() - started_at).total_seconds(),
+            )
             
             # Update task with results
             await state_manager.update_task(
@@ -325,23 +346,31 @@ Organize the information logically, remove redundancies, and ensure consistency.
     async def _reflect_and_validate(
         self,
         user_request: str,
-        aggregated: Dict[str, Any]
+        aggregated: Dict[str, Any],
+        enable_reflection: bool = True,
+        enable_qa: bool = True,
     ) -> Dict[str, Any]:
         """
         Perform reflection and quality assurance on the aggregated results.
         """
-        # Logic check
-        from ..agents.qa.logic_checker import LogicChecker
-        logic_checker = LogicChecker()
-        logic_result = await logic_checker.validate(user_request, aggregated)
-        
-        # Hallucination check
-        from ..agents.qa.hallucination_detector import HallucinationDetector
-        hallucination_detector = HallucinationDetector()
-        hallucination_result = await hallucination_detector.check(aggregated)
+        content = aggregated["aggregated"]
+        if enable_reflection:
+            from ..graph.reflection import ReflectionLoop
+            reflection = await ReflectionLoop().reflect(user_request, content)
+            content = reflection["final_output"]
+            aggregated = {**aggregated, "aggregated": content}
+
+        if enable_qa:
+            from ..agents.qa.logic_checker import LogicChecker
+            from ..agents.qa.hallucination_detector import HallucinationDetector
+            logic_result = await LogicChecker().validate(user_request, aggregated)
+            hallucination_result = await HallucinationDetector().check(aggregated)
+        else:
+            logic_result = {"valid": True, "confidence": 1.0}
+            hallucination_result = {"clean": True, "confidence": 1.0}
         
         return {
-            "content": aggregated["aggregated"],
+            "content": content,
             "logic_valid": logic_result["valid"],
             "hallucination_free": hallucination_result["clean"],
             "confidence": (logic_result["confidence"] + hallucination_result["confidence"]) / 2

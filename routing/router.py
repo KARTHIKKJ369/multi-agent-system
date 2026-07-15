@@ -50,8 +50,6 @@ class Router:
     
     def get_agent(self, agent_id: str):
         """Get an agent instance by ID"""
-        from ..agents.base_agent import BaseAgent
-        
         # Import agent classes dynamically
         agent_classes = {
             "searcher": ("agents.research.searcher", "Searcher"),
@@ -81,10 +79,8 @@ class Router:
             module = __import__(module_name, fromlist=[class_name])
             agent_class = getattr(module, class_name)
             return agent_class()
-        except ImportError:
-            self.logger.warning(f"Agent {agent_id} not implemented yet, using base agent")
-            from ..agents.base_agent import BaseAgent
-            return BaseAgent(agent_id)
+        except (ImportError, AttributeError) as exc:
+            raise RuntimeError(f"Agent implementation for {agent_id} is unavailable") from exc
     
     async def route(self, task_description: str, context: Optional[Dict] = None) -> str:
         """

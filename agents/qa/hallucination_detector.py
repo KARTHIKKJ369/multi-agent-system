@@ -1,4 +1,6 @@
 from typing import Dict, Any
+import json
+import re
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from ..base_agent import BaseAgent
@@ -66,8 +68,8 @@ Provide:
         return {
             "content": content,
             "analysis": response,
-            "clean": True,  # Would be parsed from response
-            "confidence": 0.85,  # Would be parsed from response
+            "clean": self._parse_clean(response),
+            "confidence": self._parse_confidence(response),
             "agent": "hallucination_detector"
         }
     
@@ -97,7 +99,37 @@ Provide:
         response = await self._call_llm(messages)
         
         return {
-            "clean": True,
-            "confidence": 0.85,
+            "clean": self._parse_clean(response),
+            "confidence": self._parse_confidence(response),
             "analysis": response
         }
+
+    @staticmethod
+    def _payload(content: str) -> Dict[str, Any]:
+        match = re.search(r"\{.*?\}", content, re.DOTALL)
+        if not match:
+            return {}
+        try:
+            value = json.loads(match.group())
+            return value if isinstance(value, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+
+    @classmethod
+    def _parse_clean(cls, content: str) -> bool:
+        value = cls._payload(content).get("clean")
+        if value is None:
+            match = re.search(r"\b(?:clean|hallucinations?)\s*[:=-]?\s*(yes|no|true|false|clean)\b", content, re.I)
+            value = match.group(1) if match else False
+        return str(value).lower() in {"true", "yes", "clean"}
+
+    @classmethod
+    def _parse_confidence(cls, content: str) -> float:
+        value = cls._payload(content).get("confidence", cls._payload(content).get("score"))
+        if value is None:
+            match = re.search(r"\b(?:confidence|score)\s*[:=-]?\s*([01](?:\.\d+)?)", content, re.I)
+            value = match.group(1) if match else 0.0
+        try:
+            return max(0.0, min(1.0, float(value)))
+        except (TypeError, ValueError):
+            return 0.0

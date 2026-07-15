@@ -30,6 +30,7 @@ class BaseAgent(ABC):
         self.config = get_agent_config(agent_id)
         self.logger = AgentLogger(agent_id)
         self.metrics = MetricsCollector()
+        self.last_call_metrics: Dict[str, float] = {"tokens": 0, "cost": 0.0, "latency": 0.0}
         self.llm = self._initialize_llm()
         self.tools = self._initialize_tools()
     
@@ -128,6 +129,7 @@ class BaseAgent(ABC):
                 cost=cost,
                 latency=latency
             )
+            self.last_call_metrics = {"tokens": total_tokens, "cost": cost, "latency": latency}
             
             return response.content
             
@@ -140,6 +142,7 @@ class BaseAgent(ABC):
                 cost=0.0,
                 latency=latency
             )
+            self.last_call_metrics = {"tokens": 0, "cost": 0.0, "latency": latency}
             raise
     
     async def _use_tool(self, tool_name: str, **kwargs) -> Any:

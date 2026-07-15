@@ -113,6 +113,8 @@ class ExecutionState(BaseModel):
                 task.completed_at = datetime.utcnow()
                 if task_id not in self.completed_tasks:
                     self.completed_tasks.append(task_id)
+                if task_id in self.failed_tasks:
+                    self.failed_tasks.remove(task_id)
             elif status == TaskStatus.FAILED:
                 if task_id not in self.failed_tasks:
                     self.failed_tasks.append(task_id)
@@ -162,6 +164,6 @@ class ExecutionState(BaseModel):
         """Calculate execution progress (0.0 to 1.0)"""
         if not self.tasks:
             return 0.0
-        completed = len(self.completed_tasks)
+        completed = len(self.completed_tasks) + len(self.failed_tasks)
         total = len(self.tasks)
         return completed / total if total > 0 else 0.0

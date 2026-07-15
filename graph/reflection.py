@@ -1,3 +1,5 @@
+import json
+import re
 from typing import Dict, Any, Optional
 from datetime import datetime
 from langchain_openai import ChatOpenAI
@@ -148,13 +150,12 @@ Provide your critique."""
         
         response = await self.llm.ainvoke(messages)
         
-        # Parse score from response (simplified)
-        score = 0.7  # Default, would parse from response
+        score = self._parse_score(response.content, default=0.0)
         
         return {
             "score": score,
             "feedback": response.content,
-            "suggestions": []  # Would parse from response
+            "suggestions": []
         }
     
     async def _improve(
@@ -235,15 +236,50 @@ Provide your validation."""
         
         response = await self.llm.ainvoke(messages)
         
-        # Parse validation (simplified)
-        valid = True
-        confidence = 0.85
+        valid = self._parse_valid(response.content)
+        confidence = self._parse_score(response.content, default=0.0)
         
         return {
             "valid": valid,
             "confidence": confidence,
-            "issues": []  # Would parse from response
+            "issues": []
         }
+
+    @staticmethod
+    def _parse_json_object(content: str) -> Dict[str, Any]:
+        """Extract the first JSON object, including one wrapped in a markdown fence."""
+        fenced = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL | re.IGNORECASE)
+        candidates = [fenced.group(1)] if fenced else []
+        candidates.extend(re.findall(r"\{.*?\}", content, re.DOTALL))
+        for candidate in candidates:
+            try:
+                value = json.loads(candidate)
+                if isinstance(value, dict):
+                    return value
+            except json.JSONDecodeError:
+                continue
+        return {}
+
+    @classmethod
+    def _parse_score(cls, content: str, default: float) -> float:
+        payload = cls._parse_json_object(content)
+        value = payload.get("score", payload.get("confidence"))
+        if value is None:
+            match = re.search(r"(?:overall\s+)?(?:score|confidence)\s*[:=-]?\s*([01](?:\.\d+)?)", content, re.I)
+            value = match.group(1) if match else default
+        try:
+            return max(0.0, min(1.0, float(value)))
+        except (TypeError, ValueError):
+            return default
+
+    @classmethod
+    def _parse_valid(cls, content: str) -> bool:
+        payload = cls._parse_json_object(content)
+        value = payload.get("valid")
+        if value is None:
+            match = re.search(r"\bvalid\s*[:=-]?\s*(yes|no|true|false)\b", content, re.I)
+            value = match.group(1) if match else False
+        return str(value).strip().lower() in {"true", "yes", "valid"}
     
     async def self_critique(self, agent_id: str, task: str, result: str) -> Dict[str, Any]:
         """
