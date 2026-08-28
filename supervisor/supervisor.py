@@ -226,12 +226,16 @@ Respond with only the task type."""
                         break
                     continue
                 
-                # Execute ready tasks in parallel
-                tasks_to_execute = ready_tasks[:settings.max_parallel_tasks]
-                execution_results = await asyncio.gather(
-                    *[self._execute_single_task(execution_id, task) for task in tasks_to_execute],
-                    return_exceptions=True
-                )
+                # Execute ready tasks with rate limit pacing
+                tasks_to_execute = ready_tasks
+                execution_results = []
+                for task in tasks_to_execute:
+                    try:
+                        res = await self._execute_single_task(execution_id, task)
+                        execution_results.append(res)
+                    except Exception as e:
+                        execution_results.append(e)
+                    await asyncio.sleep(0.5)
                 
                 # Process results
                 for task, result in zip(tasks_to_execute, execution_results):

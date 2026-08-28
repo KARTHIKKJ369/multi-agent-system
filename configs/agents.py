@@ -24,7 +24,7 @@ class AgentConfig:
         name: str,
         description: str,
         model: str,
-        max_tokens: int = 4000,
+        max_tokens: int = 1500,
         temperature: float = 0.7,
         tools: List[str] = None,
         capabilities: List[str] = None,
