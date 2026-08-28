@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   # Multi-Agent System API
   api:
@@ -7,69 +5,116 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     ports:
-      - "8000:8000"
+      - "${API_PORT:-8000}:8000"
     environment:
-      - ENVIRONMENT=production
-      - REDIS_URL=redis://redis:6379/0
-      - POSTGRES_URL=postgresql+asyncpg://postgres:password@postgres:5432/multi_agent
-      - QDRANT_URL=http://qdrant:6333
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+      DEBUG: ${DEBUG:-false}
+      DEFAULT_LLM_PROVIDER: ${DEFAULT_LLM_PROVIDER:-openrouter}
+      DEFAULT_MODEL: ${DEFAULT_MODEL:-nvidia/nemotron-3-ultra-550b-a55b:free}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      REDIS_URL: redis://redis:6379/0
+      POSTGRES_URL: postgresql+asyncpg://${POSTGRES_USER:-multi_agent}:${POSTGRES_PASSWORD:-multi_agent}@postgres:5432/${POSTGRES_DB:-multi_agent}
+      QDRANT_URL: http://qdrant:6333
+      METRICS_ENABLED: "true"
     depends_on:
-      - redis
-      - postgres
-      - qdrant
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
     volumes:
       - ../logs:/app/logs
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     restart: unless-stopped
 
-  # Redis for caching and conversation memory
+  # Next.js Frontend UI
+  frontend:
+    build:
+      context: ../frontend
+      target: production
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      BACKEND_INTERNAL_URL: http://api:8000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Redis for caching and fast conversation memory
   redis:
     image: redis:7-alpine
+    command: redis-server --appendonly yes
     ports:
-      - "6379:6379"
+      - "${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
-  # PostgreSQL for long-term storage
+  # PostgreSQL for long-term durable storage
   postgres:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5432}:5432"
     environment:
-      - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=password
-      - POSTGRES_DB=multi_agent
+      POSTGRES_USER: ${POSTGRES_USER:-multi_agent}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-multi_agent}
+      POSTGRES_DB: ${POSTGRES_DB:-multi_agent}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
-  # Qdrant for vector storage
+  # Qdrant for semantic vector search
   qdrant:
-    image: qdrant/qdrant:latest
+    image: qdrant/qdrant:v1.7.4
     ports:
-      - "6333:6333"
+      - "${QDRANT_PORT:-6333}:6333"
       - "6334:6334"
     volumes:
       - qdrant_data:/qdrant/storage
+    healthcheck:
+      test: ["CMD-SHELL", "./qdrant --version >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     restart: unless-stopped
 
-  # Prometheus for metrics (optional)
+  # Prometheus for metrics collection (optional)
   prometheus:
     image: prom/prometheus:latest
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_PORT:-9090}:9090"
     volumes:
-      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus_data:/prometheus
     restart: unless-stopped
 
-  # Grafana for visualization (optional)
+  # Grafana for dashboards & visualization (optional)
   grafana:
     image: grafana/grafana:latest
     ports:
-      - "3000:3000"
+      - "${GRAFANA_PORT:-3001}:3000"
     environment:
-      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
     volumes:
       - grafana_data:/var/lib/grafana
     restart: unless-stopped
@@ -80,3 +125,4 @@ volumes:
   qdrant_data:
   prometheus_data:
   grafana_data:
+

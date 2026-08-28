@@ -168,8 +168,45 @@ services:
       qdrant:
         condition: service_healthy
 
+  frontend:
+    build:
+      context: ./frontend
+      target: production
+    environment:
+      NODE_ENV: production
+      BACKEND_INTERNAL_URL: http://api:8000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend-dev:
+    build:
+      context: ./frontend
+      target: development
+    profiles:
+      - dev
+    environment:
+      NODE_ENV: development
+      BACKEND_INTERNAL_URL: http://api-dev:8000
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+      - /app/.next
+    depends_on:
+      api-dev:
+        condition: service_healthy
+    restart: unless-stopped
+
 volumes:
   app_logs:
   postgres_data:
   redis_data:
   qdrant_data:
+

@@ -63,7 +63,14 @@ Thumbs.db
 # Docker
 docker/.env
 
+# Frontend & Node
+node_modules/
+.next/
+out/
+dist/
+
 # Temporary
 tmp/
 temp/
 *.tmp
+

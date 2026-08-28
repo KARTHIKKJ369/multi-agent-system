@@ -32,13 +32,29 @@ Set `OPENAI_API_KEY` (or configure Anthropic) in `.env`; also start Redis, Postg
 
 ## Docker setup
 
+Run the complete multi-agent platform (Next.js Frontend, FastAPI Backend, PostgreSQL, Redis, and Qdrant) with Docker Compose:
+
 ```bash
+# 1. Copy environment template and configure LLM API keys
 cp .env.example .env
-# edit API keys and production secrets
-docker compose up --build
+
+# 2. Start the production stack
+docker compose up -d --build
 ```
 
-The default stack starts API, PostgreSQL, Redis, and Qdrant with health checks and persistent named volumes. For mounted source and autoreload, run `docker compose --profile dev up --build api-dev postgres redis qdrant`.
+### Endpoints
+- **Frontend Dashboard:** [http://localhost:3000](http://localhost:3000)
+- **FastAPI OpenAPI Docs:** [http://localhost:8000/api/docs](http://localhost:8000/api/docs)
+- **Health Check:** [http://localhost:8000/health](http://localhost:8000/health)
+- **Qdrant Vector DB:** [http://localhost:6333/dashboard](http://localhost:6333/dashboard)
+
+### Development Mode (with hot reloading)
+```bash
+docker compose --profile dev up --build
+```
+
+For advanced configurations, Prometheus/Grafana observability, and volume management, see the [Docker Guide](docker/README.md).
+
 
 ## Configuration and environment variables
 
