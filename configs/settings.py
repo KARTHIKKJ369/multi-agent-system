@@ -31,7 +31,7 @@ class Settings(BaseSettings):
     groq_api_key: Optional[str] = None
     groq_base_url: str = "https://api.groq.com/openai/v1"
     default_llm_provider: Literal["openai", "anthropic", "openrouter", "groq"] = "groq"
-    default_model: str = "llama-3.3-70b-versatile"
+    default_model: str = "openai/gpt-oss-120b"
 
     # Databases
     postgres_url: str = "postgresql+asyncpg://user:password@localhost:5432/multi_agent"

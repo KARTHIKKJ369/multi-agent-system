@@ -69,6 +69,7 @@ class ReflectionLoop:
                 temperature=0.3,
                 api_key=settings.groq_api_key,
                 base_url=settings.groq_base_url,
+                max_retries=6,
             )
         elif settings.default_llm_provider == "anthropic":
             return ChatAnthropic(

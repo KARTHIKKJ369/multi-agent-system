@@ -146,8 +146,8 @@ export function Sidebar() {
                 Ready
               </span>
             </div>
-            <div className="mt-2 text-[11px] text-zinc-500 font-mono">
-              OpenRouter Active Engine
+            <div className="mt-2 text-[11px] text-zinc-400 font-mono">
+              Groq: GPT-OSS 120B
             </div>
           </div>
         </div>

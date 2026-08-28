@@ -84,8 +84,8 @@ export function RequestComposer() {
             Supervisor Prompt Input
           </span>
         </div>
-        <span className="text-[11px] text-zinc-500 font-mono">
-          Model: OpenRouter / Active Engine
+        <span className="text-[11px] text-zinc-400 font-mono">
+          Model: Groq / GPT-OSS 120B
         </span>
       </div>
 

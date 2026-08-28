@@ -58,6 +58,7 @@ class BaseAgent(ABC):
                 api_key=settings.openrouter_api_key,
                 base_url=settings.openrouter_base_url,
                 default_headers=headers,
+                max_retries=6,
             )
         elif provider == "groq":
             return ChatOpenAI(
@@ -66,6 +67,7 @@ class BaseAgent(ABC):
                 max_tokens=self.config.max_tokens,
                 api_key=settings.groq_api_key,
                 base_url=settings.groq_base_url,
+                max_retries=6,
             )
         elif provider == "anthropic":
             return ChatAnthropic(
