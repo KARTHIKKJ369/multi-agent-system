@@ -149,15 +149,23 @@ Respond with a JSON object following the specified format."""
         task_graph = TaskGraph()
         
         for task_data in plan.get("tasks", []):
+            raw_task_id = task_data.get("task_id", str(uuid.uuid4()))
+            raw_deps = task_data.get("dependencies", [])
+            task_id_str = str(raw_task_id)
+            deps_str_list = [str(d) for d in raw_deps] if isinstance(raw_deps, list) else []
+            agent_str = str(task_data.get("agent", "developer"))
+
             task_state = TaskState(
-                task_id=task_data["task_id"],
-                agent_id=task_data["agent"],
-                description=task_data["description"],
-                dependencies=task_data.get("dependencies", []),
+                task_id=task_id_str,
+                agent_id=agent_str,
+                description=str(task_data.get("description", "Execute task")),
+                dependencies=deps_str_list,
                 input_data={
+                    "user_request": user_request,
+                    "specification": str(task_data.get("description", user_request)),
                     "estimated_tokens": task_data.get("estimated_tokens", 1000),
                     "estimated_time": task_data.get("estimated_time", 30),
-                    "priority": task_data.get("priority", "medium")
+                    "priority": str(task_data.get("priority", "medium"))
                 }
             )
             task_graph.add_task(task_state)

@@ -75,12 +75,19 @@ class Router:
         
         module_name, class_name = agent_classes[agent_id]
         
+        import importlib
         try:
-            module = __import__(module_name, fromlist=[class_name])
+            try:
+                module = importlib.import_module(f"multi_agent_system.{module_name}")
+            except ImportError:
+                try:
+                    module = importlib.import_module(module_name)
+                except ImportError:
+                    module = importlib.import_module(f"..{module_name}", package="multi_agent_system.routing")
             agent_class = getattr(module, class_name)
             return agent_class()
-        except (ImportError, AttributeError) as exc:
-            raise RuntimeError(f"Agent implementation for {agent_id} is unavailable") from exc
+        except Exception as exc:
+            raise RuntimeError(f"Agent implementation for {agent_id} is unavailable: {exc}") from exc
     
     async def route(self, task_description: str, context: Optional[Dict] = None) -> str:
         """

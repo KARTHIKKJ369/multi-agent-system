@@ -37,6 +37,17 @@ class ReflectionLoop:
                 temperature=0.3,
                 api_key=settings.openai_api_key
             )
+        elif settings.default_llm_provider == "openrouter":
+            headers = {"X-Title": settings.openrouter_app_name}
+            if settings.openrouter_site_url:
+                headers["HTTP-Referer"] = settings.openrouter_site_url
+            return ChatOpenAI(
+                model=settings.default_model,
+                temperature=0.3,
+                api_key=settings.openrouter_api_key,
+                base_url=settings.openrouter_base_url,
+                default_headers=headers,
+            )
         elif settings.default_llm_provider == "anthropic":
             return ChatAnthropic(
                 model=settings.default_model,
