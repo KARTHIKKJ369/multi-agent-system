@@ -85,7 +85,7 @@ export function RequestComposer() {
           </span>
         </div>
         <span className="text-[11px] text-zinc-500 font-mono">
-          Model: Nemotron 3 / OpenRouter
+          Model: OpenRouter / Active Engine
         </span>
       </div>
 

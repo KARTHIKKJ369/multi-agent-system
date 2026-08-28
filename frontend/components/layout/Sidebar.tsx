@@ -147,7 +147,7 @@ export function Sidebar() {
               </span>
             </div>
             <div className="mt-2 text-[11px] text-zinc-500 font-mono">
-              OpenRouter: Nemotron 3
+              OpenRouter Active Engine
             </div>
           </div>
         </div>

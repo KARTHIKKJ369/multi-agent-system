@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 const backendUrl =
   process.env.BACKEND_INTERNAL_URL ||
   process.env.API_URL ||
-  "http://127.0.0.1:8000";
+  "http://api:8000";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
