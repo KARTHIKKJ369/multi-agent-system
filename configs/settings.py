@@ -28,8 +28,10 @@ class Settings(BaseSettings):
     openrouter_base_url: str = "https://openrouter.ai/api/v1"
     openrouter_site_url: Optional[str] = None
     openrouter_app_name: str = "multi-agent-system"
-    default_llm_provider: Literal["openai", "anthropic", "openrouter"] = "openrouter"
-    default_model: str = "nvidia/nemotron-3-ultra-550b-a55b:free"
+    groq_api_key: Optional[str] = None
+    groq_base_url: str = "https://api.groq.com/openai/v1"
+    default_llm_provider: Literal["openai", "anthropic", "openrouter", "groq"] = "groq"
+    default_model: str = "llama-3.3-70b-versatile"
 
     # Databases
     postgres_url: str = "postgresql+asyncpg://user:password@localhost:5432/multi_agent"

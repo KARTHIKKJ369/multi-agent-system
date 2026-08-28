@@ -39,6 +39,13 @@ class Router:
                 base_url=settings.openrouter_base_url,
                 default_headers=headers,
             )
+        elif settings.default_llm_provider == "groq":
+            return ChatOpenAI(
+                model=settings.default_model,
+                temperature=0.1,
+                api_key=settings.groq_api_key,
+                base_url=settings.groq_base_url,
+            )
         elif settings.default_llm_provider == "anthropic":
             return ChatAnthropic(
                 model="claude-3-haiku",

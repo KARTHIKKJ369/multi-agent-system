@@ -11,11 +11,13 @@ services:
 
       # LLM provider
       DEFAULT_LLM_PROVIDER: ${DEFAULT_LLM_PROVIDER:-openrouter}
-      DEFAULT_MODEL: ${DEFAULT_MODEL:-nvidia/nemotron-3-ultra-550b-a55b:free}
+      DEFAULT_MODEL: ${DEFAULT_MODEL:-minimax/minimax-m2.7:free}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
       OPENROUTER_SITE_URL: ${OPENROUTER_SITE_URL:-}
       OPENROUTER_APP_NAME: ${OPENROUTER_APP_NAME:-multi-agent-system}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_BASE_URL: ${GROQ_BASE_URL:-https://api.groq.com/openai/v1}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
 
@@ -130,11 +132,13 @@ services:
 
       # LLM provider
       DEFAULT_LLM_PROVIDER: ${DEFAULT_LLM_PROVIDER:-openrouter}
-      DEFAULT_MODEL: ${DEFAULT_MODEL:-nvidia/nemotron-3-ultra-550b-a55b:free}
+      DEFAULT_MODEL: ${DEFAULT_MODEL:-minimax/minimax-m2.7:free}
       OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       OPENROUTER_BASE_URL: ${OPENROUTER_BASE_URL:-https://openrouter.ai/api/v1}
       OPENROUTER_SITE_URL: ${OPENROUTER_SITE_URL:-}
       OPENROUTER_APP_NAME: ${OPENROUTER_APP_NAME:-multi-agent-system}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      GROQ_BASE_URL: ${GROQ_BASE_URL:-https://api.groq.com/openai/v1}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
 

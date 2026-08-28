@@ -59,6 +59,14 @@ class BaseAgent(ABC):
                 base_url=settings.openrouter_base_url,
                 default_headers=headers,
             )
+        elif provider == "groq":
+            return ChatOpenAI(
+                model=settings.default_model,
+                temperature=self.config.temperature,
+                max_tokens=self.config.max_tokens,
+                api_key=settings.groq_api_key,
+                base_url=settings.groq_base_url,
+            )
         elif provider == "anthropic":
             return ChatAnthropic(
                 model=self.config.model,
