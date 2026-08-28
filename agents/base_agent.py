@@ -1,3 +1,4 @@
+import asyncio
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional, Any
 from datetime import datetime
@@ -30,9 +31,9 @@ class BaseAgent(ABC):
         self.config = get_agent_config(agent_id)
         self.logger = AgentLogger(agent_id)
         self.metrics = MetricsCollector()
-        self.last_call_metrics: Dict[str, float] = {"tokens": 0, "cost": 0.0, "latency": 0.0}
         self.llm = self._initialize_llm()
         self.tools = self._initialize_tools()
+        self.last_call_metrics: Dict[str, float] = {"tokens": 0, "cost": 0.0, "latency": 0.0}
     
     def _initialize_llm(self):
         """Initialize LLM based on agent configuration"""
@@ -94,56 +95,64 @@ class BaseAgent(ABC):
     async def _call_llm(
         self,
         messages: List,
-        tools: Optional[List] = None
+        tools: Optional[List] = None,
+        max_retries: int = 4
     ) -> str:
         """
-        Call the LLM with the given messages.
+        Call the LLM with the given messages, with retry on rate limit errors.
         """
         start_time = datetime.utcnow()
         
-        try:
-            with observability.span("llm.call", agent_id=self.agent_id, model=self.config.model):
-                if tools:
-                    response = await self.llm.ainvoke(messages, tools=tools)
+        for attempt in range(max_retries):
+            try:
+                with observability.span("llm.call", agent_id=self.agent_id, model=self.config.model):
+                    if tools:
+                        response = await self.llm.ainvoke(messages, tools=tools)
+                    else:
+                        response = await self.llm.ainvoke(messages)
+                
+                # Calculate metrics
+                latency = (datetime.utcnow() - start_time).total_seconds()
+                
+                # Estimate tokens (rough approximation)
+                prompt_text = "\n".join([msg.content for msg in messages])
+                prompt_tokens = len(prompt_text.split()) * 1.3  # Rough estimate
+                completion_tokens = len(response.content.split()) * 1.3
+                total_tokens = int(prompt_tokens + completion_tokens)
+                
+                # Estimate cost (rough approximation for GPT-4)
+                cost = (prompt_tokens * 0.00003 + completion_tokens * 0.00006) / 1000
+                
+                self.logger.log_llm_call(self.config.model, int(prompt_tokens), int(completion_tokens))
+                
+                self.metrics.metrics.record_request(
+                    agent_id=self.agent_id,
+                    success=True,
+                    tokens=total_tokens,
+                    cost=cost,
+                    latency=latency
+                )
+                self.last_call_metrics = {"tokens": total_tokens, "cost": cost, "latency": latency}
+                
+                return response.content
+                
+            except Exception as e:
+                err_str = str(e).lower()
+                if ("429" in err_str or "rate limit" in err_str or "overloaded" in err_str or "502" in err_str) and attempt < max_retries - 1:
+                    wait_time = (2 ** (attempt + 1)) + 1
+                    self.logger.warning(f"Rate limited or overloaded, retrying in {wait_time}s... (attempt {attempt+1}/{max_retries})")
+                    await asyncio.sleep(wait_time)
                 else:
-                    response = await self.llm.ainvoke(messages)
-            
-            # Calculate metrics
-            latency = (datetime.utcnow() - start_time).total_seconds()
-            
-            # Estimate tokens (rough approximation)
-            prompt_text = "\n".join([msg.content for msg in messages])
-            prompt_tokens = len(prompt_text.split()) * 1.3  # Rough estimate
-            completion_tokens = len(response.content.split()) * 1.3
-            total_tokens = int(prompt_tokens + completion_tokens)
-            
-            # Estimate cost (rough approximation for GPT-4)
-            cost = (prompt_tokens * 0.00003 + completion_tokens * 0.00006) / 1000
-            
-            self.logger.log_llm_call(self.config.model, int(prompt_tokens), int(completion_tokens))
-            
-            self.metrics.metrics.record_request(
-                agent_id=self.agent_id,
-                success=True,
-                tokens=total_tokens,
-                cost=cost,
-                latency=latency
-            )
-            self.last_call_metrics = {"tokens": total_tokens, "cost": cost, "latency": latency}
-            
-            return response.content
-            
-        except Exception as e:
-            latency = (datetime.utcnow() - start_time).total_seconds()
-            self.metrics.metrics.record_request(
-                agent_id=self.agent_id,
-                success=False,
-                tokens=0,
-                cost=0.0,
-                latency=latency
-            )
-            self.last_call_metrics = {"tokens": 0, "cost": 0.0, "latency": latency}
-            raise
+                    latency = (datetime.utcnow() - start_time).total_seconds()
+                    self.metrics.metrics.record_request(
+                        agent_id=self.agent_id,
+                        success=False,
+                        tokens=0,
+                        cost=0.0,
+                        latency=latency
+                    )
+                    self.last_call_metrics = {"tokens": 0, "cost": 0.0, "latency": latency}
+                    raise
     
     async def _use_tool(self, tool_name: str, **kwargs) -> Any:
         """

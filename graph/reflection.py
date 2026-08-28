@@ -1,5 +1,6 @@
 import json
 import re
+import asyncio
 from typing import Dict, Any, Optional
 from datetime import datetime
 from langchain_openai import ChatOpenAI
@@ -27,7 +28,21 @@ class ReflectionLoop:
     def __init__(self):
         self.logger = get_logger("reflection_loop")
         self.llm = self._initialize_llm()
-        self.max_iterations = 3
+        self.max_iterations = 2
+
+    async def _call_llm_with_retry(self, messages: Any, max_retries: int = 4) -> Any:
+        """Call LLM with retry for rate limits"""
+        for attempt in range(max_retries):
+            try:
+                return await self.llm.ainvoke(messages)
+            except Exception as e:
+                err_str = str(e).lower()
+                if ("429" in err_str or "rate limit" in err_str or "overloaded" in err_str or "502" in err_str) and attempt < max_retries - 1:
+                    wait_time = (2 ** (attempt + 1)) + 1
+                    self.logger.warning(f"Rate limited or overloaded in reflection, retrying in {wait_time}s... (attempt {attempt+1}/{max_retries})")
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise
     
     def _initialize_llm(self):
         """Initialize LLM for reflection"""
@@ -159,7 +174,7 @@ Provide your critique."""
             HumanMessage(content=human_message)
         ]
         
-        response = await self.llm.ainvoke(messages)
+        response = await self._call_llm_with_retry(messages)
         
         score = self._parse_score(response.content, default=0.0)
         
@@ -204,7 +219,7 @@ Provide the improved output."""
             HumanMessage(content=human_message)
         ]
         
-        response = await self.llm.ainvoke(messages)
+        response = await self._call_llm_with_retry(messages)
         return response.content
     
     async def _validate(
@@ -245,7 +260,7 @@ Provide your validation."""
             HumanMessage(content=human_message)
         ]
         
-        response = await self.llm.ainvoke(messages)
+        response = await self._call_llm_with_retry(messages)
         
         valid = self._parse_valid(response.content)
         confidence = self._parse_score(response.content, default=0.0)

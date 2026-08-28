@@ -149,6 +149,20 @@ class Supervisor:
         finally:
             await state_manager.close()
     
+    async def _call_llm_with_retry(self, messages: List[Any], max_retries: int = 4) -> Any:
+        """Call LLM with exponential backoff retry for rate limits (429)"""
+        for attempt in range(max_retries):
+            try:
+                return await self.llm.ainvoke(messages)
+            except Exception as e:
+                err_str = str(e).lower()
+                if ("429" in err_str or "rate limit" in err_str or "overloaded" in err_str or "502" in err_str) and attempt < max_retries - 1:
+                    wait_time = (2 ** (attempt + 1)) + 1
+                    self.logger.warning(f"Rate limited or overloaded, retrying in {wait_time}s... (attempt {attempt+1}/{max_retries})")
+                    await asyncio.sleep(wait_time)
+                else:
+                    raise
+
     async def _analyze_request(self, user_request: str) -> str:
         """
         Analyze the user request to determine the best approach.
@@ -172,7 +186,7 @@ Respond with only the task type."""
             HumanMessage(content=user_request)
         ]
         
-        response = await self.llm.ainvoke(messages)
+        response = await self._call_llm_with_retry(messages)
         task_type = response.content.strip().lower()
         
         return task_type
@@ -339,7 +353,7 @@ Organize the information logically, remove redundancies, and ensure consistency.
             HumanMessage(content=f"Aggregate these results:\n\n{results_text}")
         ]
         
-        response = await self.llm.ainvoke(messages)
+        response = await self._call_llm_with_retry(messages)
         
         return {"aggregated": response.content, "raw_results": results}
     
@@ -393,5 +407,5 @@ Be concise but thorough. Use markdown formatting when appropriate."""
             HumanMessage(content=f"User request: {user_request}\n\nValidated results: {validated['content']}")
         ]
         
-        response = await self.llm.ainvoke(messages)
+        response = await self._call_llm_with_retry(messages)
         return response.content

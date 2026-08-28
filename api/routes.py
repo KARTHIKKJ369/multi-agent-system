@@ -68,8 +68,19 @@ async def execute_request(request: RequestModel) -> ResponseModel:
         return ResponseModel(**result)
         
     except Exception as e:
-        logger.error(f"Error executing request: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        err_str = str(e)
+        logger.error(f"Error executing request: {err_str}")
+        if "429" in err_str or "rate limit" in err_str.lower():
+            raise HTTPException(
+                status_code=429,
+                detail="Upstream LLM Rate Limited (HTTP 429). Free-tier models have low requests-per-minute limits. Please wait 15-30 seconds or configure an OpenAI/Anthropic/OpenRouter key with credits."
+            )
+        elif "502" in err_str or "overloaded" in err_str.lower():
+            raise HTTPException(
+                status_code=503,
+                detail="Upstream LLM Provider Overloaded (HTTP 502/503). The selected model is temporarily unavailable. Please retry or change DEFAULT_MODEL in .env."
+            )
+        raise HTTPException(status_code=500, detail=err_str)
 
 
 @router.get("/execution/{execution_id}", response_model=ExecutionStatusModel)
