@@ -64,7 +64,7 @@ class BaseAgent(ABC):
             return ChatOpenAI(
                 model=settings.default_model,
                 temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens,
+                max_tokens=min(self.config.max_tokens or 1000, 1000),
                 api_key=settings.groq_api_key,
                 base_url=settings.groq_base_url,
                 max_retries=6,

@@ -67,6 +67,7 @@ class ReflectionLoop:
             return ChatOpenAI(
                 model=settings.default_model,
                 temperature=0.3,
+                max_tokens=1000,
                 api_key=settings.groq_api_key,
                 base_url=settings.groq_base_url,
                 max_retries=6,
