@@ -235,7 +235,7 @@ Respond with only the task type."""
                         execution_results.append(res)
                     except Exception as e:
                         execution_results.append(e)
-                    await asyncio.sleep(0.5)
+                    await asyncio.sleep(1.5)
                 
                 # Process results
                 for task, result in zip(tasks_to_execute, execution_results):

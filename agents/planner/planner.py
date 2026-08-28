@@ -30,40 +30,29 @@ class Planner(BaseAgent):
 
 For each request, you should:
 1. Understand the goal
-2. Break it down into specific, actionable subtasks
+2. Break it down into 2 to 3 focused, high-impact subtasks (e.g. architect -> developer -> tester)
 3. Identify dependencies between tasks
 4. Assign each task to the appropriate agent
-5. Estimate complexity and resources needed
 
 Available agents:
 - searcher: Web search and information retrieval
-- retriever: Document retrieval from knowledge base
 - summarizer: Summarize research findings
 - architect: Design software architecture
 - developer: Write and implement code
 - reviewer: Review code for quality
 - debugger: Debug and fix issues
 - unit_tester: Write unit tests
-- integration_tester: Write integration tests
-- logic_checker: Check logical consistency
-- hallucination_detector: Detect hallucinations
-- data_analyst: Analyze data
-- visualizer: Create visualizations
-- docker_agent: Manage Docker containers
-- kubernetes_agent: Manage Kubernetes deployments
 - documentation_writer: Write documentation
 
 Output format:
 Provide a JSON object with:
 - goal: The main goal
-- tasks: List of tasks with:
-  - task_id: Unique identifier
+- tasks: List of 2-3 tasks with:
+  - task_id: Unique identifier (e.g., t1, t2, t3)
   - agent: Which agent should handle it
   - description: What the task does
   - dependencies: List of task_ids this task depends on
-  - priority: high, medium, or low
-  - estimated_tokens: Estimated token usage
-  - estimated_time: Estimated time in seconds"""
+  - priority: high, medium, or low"""
     
     async def execute(self, task: TaskState) -> Dict[str, Any]:
         """
